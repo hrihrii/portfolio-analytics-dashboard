@@ -8,7 +8,7 @@ import yfinance as yf
 import plotly.graph_objects as go
 import statsmodels.api as sm
 from scipy.optimize import minimize
-from prophet import Prophet
+
 
 
 # Set Streamlit page configuration
