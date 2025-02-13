@@ -1327,9 +1327,9 @@ def main():
     Your CSV files for asset and benchmark data must include the following columns **with these exact names**:
     
     - **time**: Date values in a recognizable format (e.g., `YYYY-MM-DD`).
-    - **price**: The asset's price.
+    - **price**: The asset's price (OPTIONAL: If you have the **return** colomn)
     - **dividend**: Dividend yield or dividend amount.
-    - **return**: The computed return value.
+    - **return**: The computed return value. (OPTIONAL: If you have the **price** colomn)
     
     **In This Exact Format:**
 
@@ -1348,8 +1348,8 @@ def main():
 
     | time       | risk_free_rate |
     |------------|----------------|
-    | 2020-01-31 | 0.01           |
-    | 2020-02-29 | 0.012          |
+    | 2020-01-31 | 1              |
+    | 2020-02-29 | 0.5            |
 
     Please ensure that your files adhere exactly to these formats for proper data processing.
     """,
