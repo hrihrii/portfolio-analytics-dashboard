@@ -1331,7 +1331,7 @@ def main():
     - **dividend**: Dividend yield or dividend amount.
     - **return**: The computed return value.
     
-    **Example Format:**
+    **In This Exact Format:**
 
     | time       | price  | dividend | return |
     |------------|--------|----------|--------|
@@ -1342,7 +1342,7 @@ def main():
     The CSV for the risk‑free rate must have exactly **two columns** with the following names:
     
     - **time**: Date values in a recognizable format (e.g., `YYYY-MM-DD`).
-    - **risk_free_rate**: The risk‑free rate as a decimal (e.g., `0.01` for 1%).
+    - **risk_free_rate**: The risk‑free rate as percentage without the percentage sign (e.g., 1 as 1%).
     
     **Example Format:**
 
