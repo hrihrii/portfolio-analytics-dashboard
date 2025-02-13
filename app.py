@@ -1316,6 +1316,46 @@ def plot_rolling_annual_returns(portfolio_returns: pd.Series, window: int = 12,
 #########################
 def main():
     st.title("Portfolio Analytics Dashboard")
+    st.markdown(
+    """
+    ## File Upload Guidelines
+
+    **Allowed File Type:**  
+    - Only **CSV** files are permitted for uploads.
+
+    **Asset & Benchmark Data:**  
+    Your CSV files for asset and benchmark data must include the following columns **with these exact names**:
+    
+    - **time**: Date values in a recognizable format (e.g., `YYYY-MM-DD`).
+    - **price**: The asset's price.
+    - **dividend**: Dividend yield or dividend amount.
+    - **return**: The computed return value.
+    
+    **Example Format:**
+
+    | time       | price  | dividend | return |
+    |------------|--------|----------|--------|
+    | 2020-01-31 | 100.00 | 0.50     | 0.005  |
+    | 2020-02-29 | 102.00 | 0.60     | 0.020  |
+
+    **Risk‑Free Rate Data:**  
+    The CSV for the risk‑free rate must have exactly **two columns** with the following names:
+    
+    - **time**: Date values in a recognizable format (e.g., `YYYY-MM-DD`).
+    - **risk_free_rate**: The risk‑free rate as a decimal (e.g., `0.01` for 1%).
+    
+    **Example Format:**
+
+    | time       | risk_free_rate |
+    |------------|----------------|
+    | 2020-01-31 | 0.01           |
+    | 2020-02-29 | 0.012          |
+
+    Please ensure that your files adhere exactly to these formats for proper data processing.
+    """,
+    unsafe_allow_html=True
+    )
+
     
     # === Sidebar: Global Configuration & Asset Upload ===
     with st.sidebar:
