@@ -7,4 +7,4 @@ yfinance
 plotly
 statsmodels
 seaborn
-st-aggrid
+streamlit-aggrid
