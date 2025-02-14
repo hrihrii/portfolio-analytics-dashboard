@@ -13,10 +13,6 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import plotly.express as px
 from st_aggrid import AgGrid, GridOptionsBuilder
-import dash
-from dash import dcc, html, dash_table
-from dash.dependencies import Input, Output
-from dash import dcc, html, dash_table, callback, Input, Output, State
 
 
 
