@@ -20,10 +20,6 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 # Set Streamlit page configuration
 st.set_page_config(page_title="Portfolio Analytics Dashboard", layout="wide")
 
-############################
-#  Sidebar Configuration   #
-############################
-
 with st.sidebar:
     st.markdown("---")
 
@@ -66,10 +62,6 @@ with st.sidebar:
     )
     st.markdown("---")
 
-############################
-#  Process Risk‑Free Rate  #
-############################
-
 risk_free_df = pd.DataFrame()
 if risk_free_file is not None:
     risk_free_df = pd.read_csv(risk_free_file)
@@ -80,16 +72,7 @@ if risk_free_file is not None:
     if 'risk_free_rate' in risk_free_df.columns:
         risk_free_df['risk_free_rate'] = risk_free_df['risk_free_rate'].astype(float) / 100
         risk_free_df['risk_free_rate'] = risk_free_df['risk_free_rate'].astype(float)
-
-        # Standardize to end-of-month timestamps (if desired)
         risk_free_df['time'] = risk_free_df['time'].dt.to_period('M').dt.to_timestamp('M')
-
-
-############################
-#  Helper Functions        #
-############################
-
-
 
 
 
@@ -457,6 +440,7 @@ def compute_risk_contributions(aligned_returns: pd.DataFrame, weights: List[floa
         'Percent of Risk': [p * 100 for p in pct_list]
     }, index=aligned_returns.columns)
     return df_risk
+
 def calc_periodic_metrics(fund_returns: pd.Series, bench_returns: pd.Series, risk_free: pd.Series) -> Dict[str, float]:
     # Ensure the series are sorted by date.
     common_idx = fund_returns.index.intersection(bench_returns.index).intersection(risk_free.index)
@@ -545,7 +529,6 @@ def calc_periodic_metrics(fund_returns: pd.Series, bench_returns: pd.Series, ris
         "Information Ratio": info_ratio
     }
 
-# **UPDATED: Modify portfolio_metrics to accept risk_free_df**
 def portfolio_metrics(asset_data: List[pd.DataFrame], weights: List[float], asset_names: List[str], 
                      benchmark_data: pd.DataFrame = None, risk_free_df: pd.DataFrame = None, 
                      asset_benchmarks: List[pd.DataFrame] = None) -> Tuple[pd.Series, Dict[str, float], Dict[str, float], pd.DataFrame, pd.Series]:
@@ -702,6 +685,7 @@ def calc_annualized_slice_metrics(returns_slice: pd.Series) -> Dict[str, float]:
         'MaxDD':      max_dd,
         'Sharpe':     annual_sharpe
     }
+
 def display_individual_asset_periodic_metrics(asset_returns_dict: Dict[str, pd.Series],
                                               asset_benchmarks_dict: Dict[str, pd.Series],
                                               risk_free_series: pd.Series,
@@ -926,9 +910,6 @@ def display_full_periodic_table(fund_returns: pd.Series, bench_returns: pd.Serie
             return row.apply(lambda x: f"{x:.4f}" if pd.notna(x) else "N/A")
 
     
-
-    
-    
     # --- Add a disclaimer with the date up to which the fund returns (and thus the metrics) are calculated ---
     one_year_end = fund_returns.index.max()
     one_year_start = one_year_end - pd.DateOffset(months=12)
@@ -953,17 +934,12 @@ def display_full_periodic_table(fund_returns: pd.Series, bench_returns: pd.Serie
         mime="text/csv"
     )
     
-    
-    
-    
-
-    
 def plot_rolling_volatility(returns: pd.Series, window: int = 12, title: str = "Rolling Annualized Volatility"):
     """
     Plots rolling annualized volatility using a moving window.
     :param returns: A pandas Series indexed by time.
     :param window: The rolling window in periods (e.g. months).
-    :param title: Chart title.
+    :param title: Chart title
     """
     # Calculate rolling standard deviation (monthly volatility) and annualize it
     rolling_std = returns.rolling(window=window).std() * np.sqrt(12)
@@ -976,6 +952,7 @@ def plot_rolling_volatility(returns: pd.Series, window: int = 12, title: str = "
     
     
     st.altair_chart(volatility_chart, use_container_width=True)
+    return chart_df
     
 def plot_return_distribution(returns: pd.Series, asset_label: str):
     """
@@ -990,6 +967,8 @@ def plot_return_distribution(returns: pd.Series, asset_label: str):
     ).properties(title=f"Return Distribution: {asset_label}")
     
     st.altair_chart(hist, use_container_width=True)
+    return chart_df
+
 def plot_correlation_heatmap(aligned_returns: pd.DataFrame):
     """
     Plots a heatmap for the correlation matrix of the asset returns.
@@ -1108,10 +1087,6 @@ def monte_carlo_simulation_portfolio(aligned_returns: pd.DataFrame, weights: lis
     
     return sim_df, avg_sim, (worst_index, best_index)
 
- 
-# -------------------------------------------------------------------
-# Function to Compute Simulation Summary Statistics
-# -------------------------------------------------------------------
 def compute_simulation_stats(sim_df: pd.DataFrame) -> pd.DataFrame:
     """
     Computes summary statistics based on the simulation final portfolio values.
@@ -1303,7 +1278,6 @@ def portfolio_drift_rebalancing_simulation(asset_data: List[pd.DataFrame], asset
     st.write("**Final Portfolio Weights**")
     st.table(final_weights_df)
 
-
 def simulate_rebalanced_portfolio(asset_data: List[pd.DataFrame], asset_names: List[str], 
                                   weights: List[float], rebalance_period: int = None) -> Tuple[pd.DataFrame, np.ndarray]:
     """
@@ -1364,7 +1338,6 @@ def simulate_rebalanced_portfolio(asset_data: List[pd.DataFrame], asset_names: L
     
     return result_df, final_weights
 
-
 def plot_annual_returns_over_time(asset_data: List[pd.DataFrame], asset_names: List[str]) -> None:
     """
     Computes the annual return for each asset per year and displays a heatmap.
@@ -1412,6 +1385,7 @@ def plot_annual_returns_over_time(asset_data: List[pd.DataFrame], asset_names: L
     ).interactive()
     
     st.altair_chart(heatmap, use_container_width=True)
+    return data
 
 def plot_rolling_annual_returns(portfolio_returns: pd.Series, window: int = 12, 
                                 title: str = "Rolling 1Y Annualized Returns") -> None:
@@ -1440,6 +1414,7 @@ def plot_rolling_annual_returns(portfolio_returns: pd.Series, window: int = 12,
     )
     
     st.altair_chart(chart, use_container_width=True)#########################
+    return df_rolling
 
 def plot_dividend_decomposition(df: pd.DataFrame, asset_name: str) -> None:
     """
@@ -1502,7 +1477,7 @@ def plot_dividend_decomposition(df: pd.DataFrame, asset_name: str) -> None:
     st.subheader(f"{asset_name} – Dividend Contribution Summary")
     st.table(summary_df.style.format({"Average Dividend % of Total Return": "{:.2f}%" }))
 
-#  The Main Function    #
+
 def main():
     st.title("Portfolio Analytics Dashboard")
     
@@ -1523,19 +1498,23 @@ def main():
         num_assets = st.number_input(
             "**Number of Assets**", min_value=1, max_value=20, value=1, help="Select the number of assets in your portfolio."
         )
-        dividend_as_yield = st.radio(
-            "**Dividend Input Type**", ("Yield", "Actual Amount"), index=0, help="Specify whether dividends are provided as a yield (%) or actual amounts."
-        ) == "Yield"
+        
         st.markdown("---")
         st.header("Asset Upload")
         asset_data = []
         asset_names = []
         asset_benchmarks = []
+        asset_dividend_configs = []
         for i in range(num_assets):
             
             with st.expander(f"Asset {i+1}"):
                 asset_name = st.text_input(f"Asset {i+1} Name", f"Asset {i+1}", key=f"name_{i}", help="Provide a name for the asset.")
                 uploaded_file = st.file_uploader(f"Upload CSV for {asset_name}", type=["csv"], key=f"file_{i}", help="Upload a CSV file containing the asset's data.")
+                dividend_as_yield = st.radio(
+                    f"Dividend Input Type for {asset_name}", ("Yield", "Actual Amount"), index=0, 
+                    key=f"dividend_type_{i}", help="Specify whether dividends are provided as a yield (%) or actual amounts."
+                ) == "Yield"
+                asset_dividend_configs.append(dividend_as_yield)
                 if uploaded_file is not None:
                     try:
                         df = pd.read_csv(uploaded_file)
@@ -1728,6 +1707,15 @@ def main():
                                     tooltip=['time:T', 'Label:N', 'Growth:Q']
                                 ).properties(title="Portfolio vs Benchmark Growth").interactive()
                                 st.altair_chart(chart, use_container_width=True)
+                                # Insert these lines immediately after st.altair_chart(chart, use_container_width=True)
+                                csv_data = combined_df.to_csv(index=False)
+                                st.download_button(
+                                    label="Download Portfolio Growth vs Benchmark Data",
+                                    data=csv_data,
+                                    file_name="portfolio_growth_vs_benchmark.csv",
+                                    mime="text/csv",
+                                    key="download_portfolio_growth"
+                                )
                             else:
                                 chart = alt.Chart(growth_df).mark_line(color='blue').encode(
                                     x='time:T',
@@ -1735,6 +1723,15 @@ def main():
                                     tooltip=['time:T', 'Growth:Q']
                                 ).properties(title="Portfolio Growth").interactive()
                                 st.altair_chart(chart, use_container_width=True)
+                                csv_data = growth_df.to_csv(index=False)
+                                st.download_button(
+                                    label="Download Portfolio Growth Data",
+                                    data=csv_data,
+                                    file_name="portfolio_growth.csv",
+                                    mime="text/csv",
+                                    key="download_portfolio_growth_no_bench"
+                                )
+                            
                         
                         # Portfolio Drift & Rebalancing Simulation
                         filtered_asset_data = [
@@ -1816,44 +1813,172 @@ def main():
 
                 with st.expander("Advanced Risk/Return Metrics", expanded=False):
                     
-                    plot_rolling_volatility(portfolio_rets)
-                    plot_annual_returns_over_time(asset_data, asset_names)
-                    plot_rolling_annual_returns(portfolio_rets)
+                    
+                    chart_df = plot_rolling_volatility(portfolio_rets)
+                    csv_data = chart_df.to_csv(index=False)
+                    st.download_button(
+                        label="Download Rolling Annualized Volatility Data",
+                        data=csv_data,
+                        file_name="rolling_volatility.csv",
+                        mime="text/csv",
+                        key="download_rolling_volatility"
+                    )
+                    
+                    
+                    
+                    heatmap_data = plot_annual_returns_over_time(asset_data, asset_names)
+                    if not heatmap_data.empty:
+                        csv_data = heatmap_data.to_csv(index=False)
+                        st.download_button(
+                            label="Download Annual Returns Heatmap Data",
+                            data=csv_data,
+                            file_name="annual_returns_heatmap.csv",
+                            mime="text/csv",
+                            key="download_annual_returns_heatmap"
+                        )
+                    
+                    df_rolling = plot_rolling_annual_returns(portfolio_rets)
+                    csv_data = df_rolling.to_csv(index=False)
+                    st.download_button(
+                        label="Download Rolling 1Y Annualized Returns Data",
+                        data=csv_data,
+                        file_name="rolling_1y_returns.csv",
+                        mime="text/csv",
+                        key="download_rolling_1y_returns"
+                    )
                     
                     if not aligned_returns.empty:
                         st.write("**Correlation HeatMap**")
                         corr_df = aligned_returns.corr()
                         fig, ax = plt.subplots(figsize=(8, 6))
-                        sns.heatmap(corr_df, annot=True, fmt=".2f", cmap="RdBu", center=0, ax=ax)
+                        sns.heatmap(corr_df, annot=True, fmt=".2f", cmap="RdYlGn", center=0, ax=ax)
                         st.pyplot(fig)
 
                 with st.expander("Monte Carlo Simulation", expanded=False):
                     st.subheader("Monte Carlo Simulation")
-                    st.write("This chart shows a Monte Carlo simulation, which forecasts how your portfolio might perform in the future based on 1,000 different simulated outcomes. It's like running a "'what-if'" experiment a thousand times to see what might happen to your investments.")
+                    st.write("""
+                    This chart shows a Monte Carlo simulation, which forecasts how your portfolio might perform in the future based on multiple simulated outcomes. Gray lines represent individual simulations, the black line is the average outcome, the green line is the best-case scenario, and the red line is the worst-case scenario.
+                    """)
+
                     sim_horizon = st.number_input("Forecast Horizon (months)", min_value=1, max_value=60, value=12, step=1)
                     n_sims = st.number_input("Number of Simulations", min_value=100, max_value=10000, value=1000, step=100)
+
                     try:
                         sim_df, avg_sim, (worst_idx, best_idx) = monte_carlo_simulation_portfolio(aligned_returns, asset_weights, horizon=sim_horizon, n_sims=n_sims)
+                        
+                        # Prepare data for plotting
                         sim_df_reset = sim_df.reset_index(drop=True)
                         sim_df_reset["Simulation"] = sim_df_reset.index.astype(str)
                         sim_long = pd.melt(sim_df_reset, id_vars=["Simulation"], var_name="Month", value_name="Value")
                         sim_long["Month"] = sim_long["Month"].str.replace("Month_", "").astype(int)
-                        base = alt.Chart(sim_long).mark_line(color='lightgray', opacity=0.2).encode(x="Month:Q", y="Value:Q", detail="Simulation:N")
-                        avg_df = pd.DataFrame({"Month": np.arange(1, sim_horizon + 1), "Value": avg_sim})
-                        avg_line = alt.Chart(avg_df).mark_line(color='black', strokeWidth=3).encode(x="Month:Q", y="Value:Q")
-                        best_line = alt.Chart(sim_long[sim_long["Simulation"] == str(best_idx)]).mark_line(color='green', strokeWidth=3).encode(x="Month:Q", y="Value:Q")
-                        worst_line = alt.Chart(sim_long[sim_long["Simulation"] == str(worst_idx)]).mark_line(color='red', strokeWidth=3).encode(x="Month:Q", y="Value:Q")
-                        chart = alt.layer(base, avg_line, best_line, worst_line).properties(title="Monte Carlo Simulation")
+
+                        # Base simulations (all runs)
+                        base = alt.Chart(sim_long).mark_line(opacity=0.2).encode(
+                            x=alt.X("Month:Q", title="Month"),
+                            y=alt.Y("Value:Q", title="Portfolio Value"),
+                            detail="Simulation:N",
+                            color=alt.value('lightgray')
+                        )
+
+                        # Average simulation
+                        avg_df = pd.DataFrame({"Month": np.arange(1, sim_horizon + 1), "Value": avg_sim, "Label": "Average"})
+                        avg_line = alt.Chart(avg_df).mark_line(strokeWidth=3).encode(
+                            x="Month:Q",
+                            y="Value:Q",
+                            color=alt.value('black')
+                        )
+
+                        # Best simulation
+                        best_df = sim_long[sim_long["Simulation"] == str(best_idx)].copy()
+                        best_df["Label"] = "Best Case"
+                        best_line = alt.Chart(best_df).mark_line(strokeWidth=3).encode(
+                            x="Month:Q",
+                            y="Value:Q",
+                            color=alt.value('green')
+                        )
+
+                        # Worst simulation
+                        worst_df = sim_long[sim_long["Simulation"] == str(worst_idx)].copy()
+                        worst_df["Label"] = "Worst Case"
+                        worst_line = alt.Chart(worst_df).mark_line(strokeWidth=3).encode(
+                            x="Month:Q",
+                            y="Value:Q",
+                            color=alt.value('red')
+                        )
+
+                        # Combine data for legend
+                        legend_df = pd.concat([avg_df, best_df, worst_df], ignore_index=True)
+                        legend_chart = alt.Chart(legend_df).mark_line(strokeWidth=3).encode(
+                            x="Month:Q",
+                            y="Value:Q",
+                            color=alt.Color("Label:N", scale=alt.Scale(
+                                domain=["Average", "Best Case", "Worst Case"],
+                                range=["black", "green", "red"]
+                            ), legend=alt.Legend(title="Simulation Type", orient="top-right"))
+                        )
+
+                        # Layer all components
+                        chart = alt.layer(base, legend_chart).properties(
+                            title="Monte Carlo Simulation",
+                            width=600,
+                            height=400
+                        ).interactive()
+
                         st.altair_chart(chart, use_container_width=True)
+
+                        # Simulation stats
                         stats_df = compute_simulation_stats(sim_df)
-                        st.write("""
-                        This table presents key insights from the Monte Carlo simulation, which models potential future portfolio performance over multiple scenarios. It provides a statistical overview of expected returns, risks, and possible best- and worst-case outcomes.
-                        """)
-                        st.dataframe(stats_df.style.format({"Value": "{:.2%}"}))
+                        st.write("This table presents key insights from the Monte Carlo simulation, showing expected returns, risks, and best/worst-case outcomes.")
+                        # Fix formatting issue: Use a function instead of dict to avoid brace errors
+                        st.dataframe(stats_df.style.format({"Value": lambda x: f"{x:.2%}" if pd.notna(x) else "N/A"}))
+
+                        # Download button for stats
                         csv_data = stats_df.to_csv(index=False)
-                        st.download_button(label="Download Simulation Stats CSV", data=csv_data, file_name="monte_carlo_stats.csv", mime="text/csv")
+                        st.download_button(
+                            label="Download Simulation Stats CSV",
+                            data=csv_data,
+                            file_name="monte_carlo_stats.csv",
+                            mime="text/csv"
+                        )
+
+                        # Display distribution and parameters
+                        st.subheader("Simulation Parameters")
+                        st.write("Details of the distribution and parameters used in the Monte Carlo simulation:")
+                        
+                        # Extract parameters
+                        mean_vector = aligned_returns.mean()
+                        cov_matrix = aligned_returns.cov()
+                        
+                        # Parameter table
+                        param_data = {
+                            "Parameter": [
+                                "Distribution",
+                                "Number of Simulations",
+                                "Forecast Horizon (Months)",
+                                "Mean Returns (Monthly)",
+                                "Covariance Matrix"
+                            ],
+                            "Value": [
+                                "Multivariate Normal",
+                                str(n_sims),
+                                str(sim_horizon),
+                                "See below",
+                                "See below"
+                            ]
+                        }
+                        param_df = pd.DataFrame(param_data)
+                        st.table(param_df)
+
+                        # Mean returns
+                        
+
+                        # Covariance matrix
+                        st.write("Covariance Matrix:")
+                        st.dataframe(cov_matrix.style.format("{:.6f}"))
+
                     except Exception as e:
                         st.error(f"Monte Carlo simulation error: {e}")
+
 
                 with st.expander("Sharpe Optimized Portfolio Allocation", expanded=False):
                     st.write("""
@@ -1870,7 +1995,7 @@ def main():
                             opt_growth = pd.DataFrame({
                                 'time': aligned_returns.index,
                                 'Growth': (1 + opt_rets).cumprod(),
-                                'Label': 'Optimized Portfolio'
+                                'Label': 'Sharpe-Optimized Portfolio'
                             })
 
                             # Current portfolio returns (using original weights)
@@ -1889,14 +2014,14 @@ def main():
                                 x=alt.X('time:T', title='Time'),
                                 y=alt.Y('Growth:Q', title='Cumulative Growth'),
                                 color=alt.Color('Label:N', scale=alt.Scale(
-                                    domain=['Current Portfolio', 'Sharpe-Optimizedd Portfolio'],
+                                    domain=['Current Portfolio', 'Sharpe-Optimized Portfolio'],
                                     range=['blue', 'green']  # Blue for current, green for optimized
                                 )),
                                 tooltip=[alt.Tooltip('time:T', title='Date', format='%Y-%m-%d'),
                                          alt.Tooltip('Label:N', title='Portfolio'),
                                          alt.Tooltip('Growth:Q', title='Growth', format='.4f')]
                             ).properties(
-                                title="Current vs Optimized Portfolio Growth",
+                                title="Current vs Sharpe-Optimized Portfolio Growth",
                                 width=600,
                                 height=400
                             ).interactive()
@@ -1992,6 +2117,16 @@ def main():
                                 x='time:T', y='Growth:Q', color='Label:N', tooltip=['time:T', 'Label:N', 'Growth:Q']
                             ).interactive()
                             st.altair_chart(chart, use_container_width=True)
+                            # Insert after line ~1368
+                            csv_data = combined_df.to_csv(index=False)
+                            st.download_button(
+                                label=f"Download {asset} Growth Chart Data",
+                                data=csv_data,
+                                file_name=f"{asset}_growth_chart.csv",
+                                mime="text/csv",
+                                key=f"download_growth_{asset}"
+                            )
+                            
 
                         st.subheader(f"{asset} - Drawdown Chart")
                         if asset in asset_returns_dict:
@@ -2017,7 +2152,16 @@ def main():
                         # Separate Expander for Return Distribution
                         st.subheader(f"{asset} - Return Distribution")
                         if asset in asset_returns_dict:
-                            plot_return_distribution(asset_returns_dict[asset], asset)
+                            chart_df = plot_return_distribution(asset_returns_dict[asset], asset)
+                            csv_data = chart_df.to_csv(index=False)
+                            st.download_button(
+                                label=f"Download {asset} Return Distribution Data",
+                                data=csv_data,
+                                file_name=f"{asset}_return_distribution.csv",
+                                mime="text/csv",
+                                key=f"download_return_dist_{asset}"
+                            )
+                            
                         
                                             
                         st.subheader(f"{asset} - Annual Returns Bar Plot")
@@ -2052,6 +2196,15 @@ def main():
                                 ).interactive()
                                 
                                 st.altair_chart(bar_chart, use_container_width=True)
+                                
+                                csv_data = annual_returns.to_csv(index=False)
+                                st.download_button(
+                                    label=f"Download {asset} Annual Returns Data",
+                                    data=csv_data,
+                                    file_name=f"{asset}_annual_returns.csv",
+                                    mime="text/csv",
+                                    key=f"download_annual_returns_{asset}"
+                                )
 
         except Exception as e:
             st.error(f"Portfolio calculation error: {str(e)}")
