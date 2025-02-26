@@ -974,7 +974,9 @@ def plot_rolling_volatility(returns: pd.Series, window: int = 12, title: str = "
         y=alt.Y("Rolling Volatility:Q", title="Annualized Volatility")
     ).properties(title=title)
     
+    
     st.altair_chart(volatility_chart, use_container_width=True)
+    
 def plot_return_distribution(returns: pd.Series, asset_label: str):
     """
     Plots the distribution of returns for a single asset.
@@ -1290,6 +1292,7 @@ def portfolio_drift_rebalancing_simulation(asset_data: List[pd.DataFrame], asset
     
     st.altair_chart(sim_chart, use_container_width=True)
     
+    
     # Create a DataFrame for the final portfolio weights.
     final_weights_df = pd.DataFrame({
     "Asset": asset_names,
@@ -1503,6 +1506,19 @@ def plot_dividend_decomposition(df: pd.DataFrame, asset_name: str) -> None:
 def main():
     st.title("Portfolio Analytics Dashboard")
     
+    st.subheader("Download Helper Documentation")
+    with open("docs/helper_doc.pdf", "rb") as pdf_file:
+        pdf_data = pdf_file.read()
+    st.download_button(
+        label="Download Helper Documentation (PDF)",
+        data=pdf_data,
+        file_name="Portfolio_Analytics_Dashboard_Helper_Documentation.pdf",
+        mime="application/pdf",
+        key="download_helper_doc"
+    )
+    st.markdown("---")
+    
+    
     # Define percentage_metrics for use in both tabs
     percentage_metrics = {
         "Ann Return (Fund)", "Ann Return (Benchmark)", "Excess Return", "Ann Risk-free Rate",
@@ -1605,13 +1621,31 @@ def main():
                 return
         else:
             benchmark_data = pd.DataFrame()
-    else:
+    
+    else:  # Upload Benchmark CSV
         if benchmark_file is not None:
-            benchmark_data = pd.read_csv(benchmark_file)
-            benchmark_data = adjust_column_names(benchmark_data)
-            if ('price' in benchmark_data.columns) and ('return' not in benchmark_data.columns):
-                benchmark_data['return'] = benchmark_data['price'].pct_change()
-            benchmark_data['time'] = pd.to_datetime(benchmark_data['time']).dt.to_period('M').dt.to_timestamp('M')
+            try:
+                benchmark_data = pd.read_csv(benchmark_file)
+                benchmark_data = adjust_column_names(benchmark_data)  # Standardize column names
+                # Ensure required columns and calculate return if missing
+                if ('price' not in benchmark_data.columns or benchmark_data['price'].isnull().all()) and ('return' in benchmark_data.columns):
+                    benchmark_data['price'] = (1 + benchmark_data['return']).cumprod()
+                elif 'price' in benchmark_data.columns and 'return' not in benchmark_data.columns:
+                    benchmark_data['return'] = benchmark_data['price'].pct_change()
+                else:
+                    raise ValueError("Either 'price' or 'return' must be provided in the benchmark CSV.")
+                # Ensure 'dividend' exists, default to 0 if missing
+                if 'dividend' not in benchmark_data.columns:
+                    benchmark_data['dividend'] = 0
+                validate_columns(benchmark_data)  # Validate required columns
+                benchmark_data['time'] = pd.to_datetime(benchmark_data['time']).dt.to_period('M').dt.to_timestamp('M')
+                # Drop any rows with NaN in critical columns
+                benchmark_data = benchmark_data.dropna(subset=['time', 'price', 'return'])
+                # Log for debugging
+                st.write("DEBUG: Processed Benchmark Data from CSV", benchmark_data.head())
+            except Exception as e:
+                st.error(f"Error processing benchmark CSV: {str(e)}. Ensure the file has columns 'time', 'price', 'dividend', and 'return' (or compute 'return' from 'price').")
+                benchmark_data = pd.DataFrame()
         else:
             benchmark_data = pd.DataFrame()
 
@@ -1723,30 +1757,46 @@ def main():
                 with st.expander("Monthly Performance Table", expanded=False):
                     st.subheader("Monthly Performance Table")
                     st.write("This table presents the monthly performance of the portfolio compared to its weighted benchmark. It provides a month-by-month breakdown of returns, allowing for direct comparison between actual portfolio performance and the benchmark’s expected performance.")
-                    if not portfolio_rets.empty and not benchmark_data.empty:
+                    if not portfolio_rets.empty and not benchmark_returns.empty:
+                        # Resample portfolio returns to yearly totals
                         portfolio_returns_yearly = portfolio_rets.resample('Y').apply(lambda x: (1 + x).prod() - 1)
-                        benchmark_yearly = benchmark_data.set_index('time')['return'].resample('Y').apply(lambda x: (1 + x).prod() - 1)
+                        # Resample weighted benchmark returns (Series) to yearly totals
+                        benchmark_yearly = benchmark_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1)
                         portfolio_returns_yearly.index = portfolio_returns_yearly.index.year
                         benchmark_yearly.index = benchmark_yearly.index.year
+                        
+                        # Prepare monthly table for portfolio returns
                         portfolio_monthly = portfolio_rets.reset_index()
                         portfolio_monthly.columns = ['time', 'return']
                         portfolio_monthly['Year'] = portfolio_monthly['time'].dt.year
                         portfolio_monthly['Month'] = portfolio_monthly['time'].dt.month
                         monthly_table = portfolio_monthly.pivot(index='Year', columns='Month', values='return')
+                        
+                        # Ensure all months are included (1-12)
                         all_months = pd.MultiIndex.from_product([monthly_table.index, range(1, 13)], names=['Year', 'Month'])
                         monthly_table = portfolio_monthly.set_index(['Year', 'Month']).reindex(all_months)['return'].unstack()
+                        
+                        # Add yearly totals for portfolio and benchmark
                         monthly_table['Total'] = portfolio_returns_yearly.reindex(monthly_table.index, fill_value=np.nan)
                         monthly_table['Benchmark'] = benchmark_yearly.reindex(monthly_table.index, fill_value=np.nan)
+                        
+                        # Rename months to names
                         month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
                         monthly_table.rename(columns={i + 1: month_names[i] for i in range(12)}, inplace=True)
                         monthly_table.index = monthly_table.index.map(str)
+                        
+                        # Display table with formatting
                         st.dataframe(monthly_table.style.format("{:.2%}"))
                         csv_data = monthly_table.to_csv(index=True)
                         st.download_button(label="Download Monthly Performance CSV", data=csv_data, file_name="monthly_performance.csv", mime="text/csv")
+                        
+                        # Display best and worst years
                         best_year, best_return = portfolio_returns_yearly.idxmax(), portfolio_returns_yearly.max()
                         worst_year, worst_return = portfolio_returns_yearly.idxmin(), portfolio_returns_yearly.min()
                         st.markdown(f"**Best Year:** {best_year} ({best_return:.2%})")
                         st.markdown(f"**Worst Year:** {worst_year} ({worst_return:.2%})")
+                    else:
+                        st.warning("Portfolio or benchmark data is empty. Cannot display monthly performance table.")
 
                 with st.expander("Risk Analysis", expanded=False):
                     if not risk_decomp_table.empty:
@@ -1775,6 +1825,7 @@ def main():
                 
 
                 with st.expander("Advanced Risk/Return Metrics", expanded=False):
+                    
                     plot_rolling_volatility(portfolio_rets)
                     plot_annual_returns_over_time(asset_data, asset_names)
                     plot_rolling_annual_returns(portfolio_rets)
@@ -1814,7 +1865,10 @@ def main():
                     except Exception as e:
                         st.error(f"Monte Carlo simulation error: {e}")
 
-                with st.expander("Optimized Portfolio Allocation", expanded=False):
+                with st.expander("Sharpe Optimized Portfolio Allocation", expanded=False):
+                    st.write("""
+                    This section optimizes your portfolio to maximize the Sharpe Ratio, which measures how much return you get for each unit of risk. The optimization tweaks your asset weights to find the best balance between higher returns and lower volatility, assuming no short selling (all weights stay positive). The chart compares your current portfolio’s growth (blue) with this optimized version (green), showing how adjusting your allocations could potentially boost performance while keeping risk in check.
+                    """)
                     if not aligned_returns.empty:
                         try:
                             optimized_weights = maximize_sharpe_ratio(aligned_returns, risk_free_rate=0.001, allow_short=False)
@@ -1845,7 +1899,7 @@ def main():
                                 x=alt.X('time:T', title='Time'),
                                 y=alt.Y('Growth:Q', title='Cumulative Growth'),
                                 color=alt.Color('Label:N', scale=alt.Scale(
-                                    domain=['Current Portfolio', 'Optimized Portfolio'],
+                                    domain=['Current Portfolio', 'Sharpe-Optimizedd Portfolio'],
                                     range=['blue', 'green']  # Blue for current, green for optimized
                                 )),
                                 tooltip=[alt.Tooltip('time:T', title='Date', format='%Y-%m-%d'),
@@ -1862,6 +1916,9 @@ def main():
                             st.error(f"Optimization error: {e}")
                             
                 with st.expander("Drawdown-Optimized Growth (Max Calmar Ratio)", expanded=False):
+                    st.write("""
+                    This optimization focuses on maximizing the Calmar Ratio, which looks at your portfolio’s annual return relative to its worst drop (maximum drawdown). It adjusts your asset weights to prioritize steady growth while minimizing big losses, without allowing short selling (all weights stay positive). The chart compares your current portfolio (blue) to this drawdown-optimized version (green), highlighting how these new weights could help protect against steep declines while still aiming for solid returns. It’s ideal if you want to sleep better during market downturns.
+                    """)
                     if not aligned_returns.empty:
                         try:
                             calmar_weights = maximize_calmar_ratio(aligned_returns, risk_free_rate=0.001, allow_short=False)
