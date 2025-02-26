@@ -1506,17 +1506,7 @@ def plot_dividend_decomposition(df: pd.DataFrame, asset_name: str) -> None:
 def main():
     st.title("Portfolio Analytics Dashboard")
     
-    st.subheader("Download Helper Documentation")
-    with open("docs/helper_doc.pdf", "rb") as pdf_file:
-        pdf_data = pdf_file.read()
-    st.download_button(
-        label="Download Helper Documentation (PDF)",
-        data=pdf_data,
-        file_name="Portfolio_Analytics_Dashboard_Helper_Documentation.pdf",
-        mime="application/pdf",
-        key="download_helper_doc"
-    )
-    st.markdown("---")
+    
     
     
     # Define percentage_metrics for use in both tabs
