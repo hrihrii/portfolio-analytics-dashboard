@@ -17,7 +17,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 
 
 
-# Set Streamlit page configuration
+
 st.set_page_config(page_title="Portfolio Analytics Dashboard", layout="wide")
 
 with st.sidebar:
@@ -25,7 +25,7 @@ with st.sidebar:
 
 
     st.subheader("Benchmark Configuration")
-    # New radio to choose the benchmark data source
+    
     use_global_benchmark = st.checkbox("Use Global Benchmark Instead of Per-Asset Benchmarks", value=False)
     benchmark_source = st.radio(
     "Select Benchmark Source",
@@ -312,7 +312,7 @@ def adjust_column_names(df: pd.DataFrame) -> pd.DataFrame:
     return df.rename(columns=rename_map)
 
 def validate_columns(df: pd.DataFrame) -> None:
-    # **UPDATED: Remove 'risk_free_rate' requirement**
+    
     required_columns = {'time', 'price', 'dividend', 'return'}
     missing_columns = required_columns - set(df.columns)
     if missing_columns:
@@ -442,7 +442,7 @@ def compute_risk_contributions(aligned_returns: pd.DataFrame, weights: List[floa
     return df_risk
 
 def calc_periodic_metrics(fund_returns: pd.Series, bench_returns: pd.Series, risk_free: pd.Series) -> Dict[str, float]:
-    # Ensure the series are sorted by date.
+    
     common_idx = fund_returns.index.intersection(bench_returns.index).intersection(risk_free.index)
     fund_returns = fund_returns.sort_index()
     bench_returns = bench_returns.sort_index()
@@ -755,7 +755,7 @@ def display_individual_asset_periodic_metrics(asset_returns_dict: Dict[str, pd.S
         "Tracking Error (Fund)"
     }
 
-    # Define specific formatting rules for non-percentage metrics (except Up/Down Capture)
+    
     format_dict = {
         "Win/Loss Ratio (Fund)": "{:.3f}",
         "Win/Loss Ratio (Benchmark)": "{:.3f}",
@@ -765,7 +765,7 @@ def display_individual_asset_periodic_metrics(asset_returns_dict: Dict[str, pd.S
         "Information Ratio": "{:.3f}"
     }
 
-    # Use the row's index (i.e. the metric name) to decide formatting for that entire row.
+   
     def format_row(row):
         metric_name = row.name  # e.g., "Up Capture"
         if metric_name in percentage_metrics:
@@ -833,10 +833,10 @@ def display_individual_asset_periodic_metrics(asset_returns_dict: Dict[str, pd.S
             "End Date": end_date.strftime("%Y-%m-%d")
         })
     
-    # Create a DataFrame from the table data.
+    
     df_dates = pd.DataFrame(table_data)
     
-    # Optionally, sort the table for clarity.
+   
     df_dates = df_dates.sort_values(["Asset", "Period"])
     
     st.subheader("Data Window Details")
@@ -869,8 +869,7 @@ def display_full_periodic_table(fund_returns: pd.Series, bench_returns: pd.Serie
         data["ITD"].append(itd[metric])
     df_table = pd.DataFrame(data, index=metrics)
 
-    # Define which metrics should be formatted as percentages
-        # Define which metrics should be formatted as percentages
+    
     percentage_metrics = {
         "Ann Return (Fund)",
         "Ann Return (Benchmark)",
@@ -886,7 +885,7 @@ def display_full_periodic_table(fund_returns: pd.Series, bench_returns: pd.Serie
         "Tracking Error (Fund)"
     }
 
-    # Define specific formatting rules for non-percentage metrics (except Up/Down Capture)
+    
     format_dict = {
         "Win/Loss Ratio (Fund)": "{:.3f}",
         "Win/Loss Ratio (Benchmark)": "{:.3f}",
