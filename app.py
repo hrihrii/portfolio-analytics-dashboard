@@ -2283,28 +2283,7 @@ def main():
                         except Exception as e:
                             st.error(f"Calmar optimization error: {e}")         
                 
-                with st.expander("Hybrid Monte Carlo RL Optimization", expanded=False):
-                    st.subheader("Hybrid Monte Carlo with RL Optimization")
-                    st.write("Uses DCC-GARCH, t-Copula, and PPO for advanced portfolio optimization.")
-                    
-                    sim_horizon = st.number_input("Forecast Horizon (months)", min_value=1, max_value=60, value=12, step=1, key="sim_horizon_rl")
-                    n_sims = st.number_input("Number of Simulations", min_value=100, max_value=10000, value=1000, step=100, key="n_sims_rl")
-                    max_drawdown_threshold = st.number_input("Max Drawdown Threshold (%)", min_value=-100.0, max_value=0.0, value=-25.0, key="max_drawdown_rl") / 100
-                    min_alpha = st.number_input("Minimum Alpha (%)", min_value=0.0, max_value=100.0, value=5.0, key="min_alpha_rl") / 100
-                    
-                    if st.button("Run Optimization", key="run_optimization_rl"):
-                        if not aligned_returns.empty and not weighted_benchmark_returns.empty:
-                            try:
-                                sim_df, optimized_weights, weights_df, stats, evolution_df = hybrid_monte_carlo_rl_optimization(
-                                    aligned_returns, asset_names, asset_weights, weighted_benchmark_returns, 0.02, sim_horizon, n_sims, max_drawdown_threshold, min_alpha
-                                )
-                                st.write("Optimized Weights:", weights_df)
-                                st.write("Stats:", stats)
-                                # Add plotting as needed (e.g., from previous examples)
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-                        else:
-                            st.warning("Missing data.")
+                
 
             with tab2:  # Individual Asset Metrics
                 for asset in asset_names:
