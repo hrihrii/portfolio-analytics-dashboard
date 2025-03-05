@@ -18,6 +18,8 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 
 
 
+
+# Set Streamlit page configuration
 st.set_page_config(page_title="Portfolio Analytics Dashboard", layout="wide")
 
 with st.sidebar:
@@ -25,7 +27,7 @@ with st.sidebar:
 
 
     st.subheader("Benchmark Configuration")
-    
+    # New radio to choose the benchmark data source
     use_global_benchmark = st.checkbox("Use Global Benchmark Instead of Per-Asset Benchmarks", value=False)
     benchmark_source = st.radio(
     "Select Benchmark Source",
@@ -312,7 +314,7 @@ def adjust_column_names(df: pd.DataFrame) -> pd.DataFrame:
     return df.rename(columns=rename_map)
 
 def validate_columns(df: pd.DataFrame) -> None:
-    
+    # **UPDATED: Remove 'risk_free_rate' requirement**
     required_columns = {'time', 'price', 'dividend', 'return'}
     missing_columns = required_columns - set(df.columns)
     if missing_columns:
@@ -442,7 +444,7 @@ def compute_risk_contributions(aligned_returns: pd.DataFrame, weights: List[floa
     return df_risk
 
 def calc_periodic_metrics(fund_returns: pd.Series, bench_returns: pd.Series, risk_free: pd.Series) -> Dict[str, float]:
-    
+    # Ensure the series are sorted by date.
     common_idx = fund_returns.index.intersection(bench_returns.index).intersection(risk_free.index)
     fund_returns = fund_returns.sort_index()
     bench_returns = bench_returns.sort_index()
@@ -755,7 +757,7 @@ def display_individual_asset_periodic_metrics(asset_returns_dict: Dict[str, pd.S
         "Tracking Error (Fund)"
     }
 
-    
+    # Define specific formatting rules for non-percentage metrics (except Up/Down Capture)
     format_dict = {
         "Win/Loss Ratio (Fund)": "{:.3f}",
         "Win/Loss Ratio (Benchmark)": "{:.3f}",
@@ -765,7 +767,7 @@ def display_individual_asset_periodic_metrics(asset_returns_dict: Dict[str, pd.S
         "Information Ratio": "{:.3f}"
     }
 
-   
+    # Use the row's index (i.e. the metric name) to decide formatting for that entire row.
     def format_row(row):
         metric_name = row.name  # e.g., "Up Capture"
         if metric_name in percentage_metrics:
@@ -833,10 +835,10 @@ def display_individual_asset_periodic_metrics(asset_returns_dict: Dict[str, pd.S
             "End Date": end_date.strftime("%Y-%m-%d")
         })
     
-    
+    # Create a DataFrame from the table data.
     df_dates = pd.DataFrame(table_data)
     
-   
+    # Optionally, sort the table for clarity.
     df_dates = df_dates.sort_values(["Asset", "Period"])
     
     st.subheader("Data Window Details")
@@ -869,7 +871,8 @@ def display_full_periodic_table(fund_returns: pd.Series, bench_returns: pd.Serie
         data["ITD"].append(itd[metric])
     df_table = pd.DataFrame(data, index=metrics)
 
-    
+    # Define which metrics should be formatted as percentages
+        # Define which metrics should be formatted as percentages
     percentage_metrics = {
         "Ann Return (Fund)",
         "Ann Return (Benchmark)",
@@ -885,7 +888,7 @@ def display_full_periodic_table(fund_returns: pd.Series, bench_returns: pd.Serie
         "Tracking Error (Fund)"
     }
 
-    
+    # Define specific formatting rules for non-percentage metrics (except Up/Down Capture)
     format_dict = {
         "Win/Loss Ratio (Fund)": "{:.3f}",
         "Win/Loss Ratio (Benchmark)": "{:.3f}",
@@ -1173,6 +1176,142 @@ def maximize_calmar_ratio(returns: pd.DataFrame, risk_free_rate: float = 0.0, al
     
     return result.x
 
+
+def hybrid_monte_carlo_rl_optimization(
+    aligned_returns: pd.DataFrame,
+    asset_names: List[str],
+    initial_weights: List[float],
+    benchmark_returns: pd.Series,
+    risk_free_rate: float = 0.0,
+    horizon: int = 12,
+    n_sims: int = 1000,
+    max_drawdown_threshold: float = -0.25,
+    min_alpha: float = 0.05,
+    episodes: int = 500,
+    min_weight: float = 0.01
+) -> Tuple[pd.DataFrame, np.ndarray, pd.DataFrame, Dict[str, float], pd.DataFrame]:
+    # Step 1: CCC-GARCH-like Modeling with t-Copula Enhancement
+    returns = aligned_returns.dropna() * 100
+    if len(returns) < 20:
+        raise ValueError("Insufficient data for GARCH modeling.")
+
+    residuals = pd.DataFrame(index=returns.index)
+    vol_forecasts = np.zeros((horizon, len(asset_names)))
+    for i, asset in enumerate(returns.columns):
+        model = arch_model(returns[asset], vol='Garch', p=1, q=1, mean='Zero', dist='Normal')
+        fit = model.fit(disp='off')
+        residuals[asset] = fit.resid / fit.conditional_volatility
+        forecast = fit.forecast(horizon=horizon)
+        vol_forecasts[:, i] = np.sqrt(forecast.variance.iloc[-1].values) / 100
+
+    corr_matrix = residuals.corr().values
+    cop = TCopula(dim=len(asset_names), df=4)
+    cop.fit(residuals.values / 100)
+
+    sim_returns_array = np.zeros((n_sims, horizon, len(asset_names)))
+    chol = np.linalg.cholesky(corr_matrix)
+    for t in range(horizon):
+        u = cop.random(n_sims)
+        sim_residuals = np.array([np.percentile(residuals.values[:, i] / 100, u[:, i] * 100) for i in range(len(asset_names))]).T
+        sim_returns_array[:, t, :] = (sim_residuals @ chol.T) * vol_forecasts[t]
+
+    # Step 2: PPO RL Environment (Gymnasium-compatible)
+    class PortfolioEnv(Env):  # Updated to inherit from gymnasium.Env
+        def __init__(self, sim_returns, bench_returns, rf_rate, max_dd, min_alpha, initial_weights, min_weight):
+            super(PortfolioEnv, self).__init__()
+            self.sim_returns = sim_returns
+            self.bench_returns = bench_returns.reindex(aligned_returns.index[-horizon:]).fillna(0).values
+            self.rf_rate = rf_rate / 12
+            self.max_dd = max_dd
+            self.min_alpha = min_alpha
+            self.weights = np.array(initial_weights)
+            self.n_assets = len(initial_weights)
+            self.min_weight = min_weight
+            self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(self.n_assets,), dtype=np.float32)
+            self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(5,), dtype=np.float32)
+            self.step_count = 0
+            self.max_steps = horizon
+
+        def reset(self, seed=None, options=None):  # Updated Gymnasium reset signature
+            super().reset(seed=seed)  # Optional: handle seed if provided
+            self.weights = np.array(initial_weights)
+            self.step_count = 0
+            return self._get_state(), {}  # Return observation and info dict
+
+        def _get_state(self):
+            port_returns = np.dot(self.sim_returns, self.weights)
+            cum_returns = (1 + port_returns).cumprod(axis=1)
+            drawdowns = (cum_returns / np.maximum.accumulate(cum_returns, axis=1)) - 1
+            max_dd = drawdowns.min()
+            vol = port_returns.std(axis=1).mean() * np.sqrt(12)
+            avg_return = port_returns.mean(axis=1).mean() * 12
+            excess_return = avg_return - self.rf_rate
+            sharpe = excess_return / vol if vol > 0 else 0
+            bench_avg = self.bench_returns.mean() * 12
+            alpha = avg_return - bench_avg
+            corr = np.corrcoef(port_returns.mean(axis=0), self.bench_returns)[0, 1]
+            return np.array([max_dd, alpha, vol, sharpe, corr], dtype=np.float32)
+
+        def step(self, action):
+            self.weights += action
+            self.weights = np.clip(self.weights, self.min_weight, None)
+            self.weights /= self.weights.sum()
+            state = self._get_state()
+            max_dd, alpha, vol, sharpe, corr = state
+            reward = (
+                (1 if max_dd <= self.max_dd else -10 * (max_dd - self.max_dd)) +
+                (1 if alpha >= self.min_alpha else -10 * (self.min_alpha - alpha)) +
+                sharpe
+            )
+            self.step_count += 1
+            done = self.step_count >= self.max_steps
+            truncated = False  # Gymnasium separates done and truncated
+            return state, reward, done, truncated, {}
+
+        def render(self, mode='human'):
+            pass
+
+    # Step 3: PPO Training
+    env = PortfolioEnv(sim_returns_array, benchmark_returns, risk_free_rate, max_drawdown_threshold, min_alpha, initial_weights, min_weight)
+    check_env(env)
+    model = PPO("MlpPolicy", env, verbose=0, n_steps=horizon, batch_size=64, n_epochs=10, clip_range=0.2)
+    model.learn(total_timesteps=episodes * horizon)
+
+    # Extract optimized weights after training
+    state, _ = env.reset()
+    for _ in range(horizon):
+        action, _ = model.predict(state)
+        state, _, _, _, _ = env.step(action)
+    optimized_weights = env.weights
+
+    # Step 4: Final Simulation with Optimized Weights
+    port_sim_returns = np.dot(sim_returns_array, optimized_weights)
+    cum_port_returns = (1 + port_sim_returns).cumprod(axis=1)
+    sim_df = pd.DataFrame(cum_port_returns, columns=[f"Month_{i+1}" for i in range(horizon)])
+
+    # Step 5: Stats
+    final_values = cum_port_returns[:, -1]
+    stats = {
+        "Mean Final Value": final_values.mean(),
+        "Max Drawdown": ((cum_port_returns / np.maximum.accumulate(cum_port_returns, axis=1)) - 1).min(),
+        "Annualized Return": port_sim_returns.mean(axis=1).mean() * 12,
+        "Alpha": port_sim_returns.mean(axis=1).mean() * 12 - benchmark_returns.mean() * 12,
+        "Volatility": port_sim_returns.std(axis=1).mean() * np.sqrt(12),
+        "Sharpe": ((port_sim_returns.mean(axis=1).mean() * 12 - risk_free_rate) / 
+                   (port_sim_returns.std(axis=1).mean() * np.sqrt(12))) if port_sim_returns.std(axis=1).mean() > 0 else 0
+    }
+
+    weights_df = pd.DataFrame({
+        "Asset": asset_names,
+        "Initial Weight": initial_weights,
+        "Optimized Weight": optimized_weights
+    })
+
+    # Step 6: Evolution Data (Simplified for PPO)
+    evolution_data = {"Weights": [optimized_weights], "Max Drawdown": [stats["Max Drawdown"]], "Alpha": [stats["Alpha"]]}
+    evolution_df = pd.DataFrame(evolution_data)
+
+    return sim_df, optimized_weights, weights_df, stats, evolution_df
 def maximize_sharpe_ratio(returns: pd.DataFrame, risk_free_rate: float = 0.0, allow_short: bool = False) -> np.ndarray:
     """
     Optimize portfolio weights to maximize the Sharpe ratio.
@@ -1739,6 +1878,90 @@ def main():
                             for df in asset_data
                         ]
                         portfolio_drift_rebalancing_simulation(filtered_asset_data, asset_names, asset_weights)
+                
+                with st.expander("Risk Analysis", expanded=False):
+                    col1, col2 = st.columns(2)
+    
+                    # Left Column: Current Risk Decomposition (Static)
+                    with col1:
+                        if not risk_decomp_table.empty:
+                            risk_decomp_df = risk_decomp_table.reset_index().rename(columns={'index': 'Asset'})
+                            pie_chart_static = alt.Chart(risk_decomp_df).mark_arc().encode(
+                                theta=alt.Theta('Percent of Risk:Q', stack=True),
+                                color='Asset:N',
+                                tooltip=['Asset', 'Percent of Risk']
+                            ).properties(
+                                title="Current Risk Decomposition",
+                                width=300,
+                                height=300
+                            )
+                            st.subheader("Current Risk Decomposition")
+                            st.write("This pie chart shows the contribution of each asset to the portfolio's risk based on current weights.")
+                            st.altair_chart(pie_chart_static, use_container_width=True)
+                        else:
+                            st.warning("Risk decomposition data is not available.")
+
+                    # Right Column: Risk Decomposition with Drift & Rebalancing
+                    with col2:
+                        st.subheader("Risk Decomposition with Drift & Rebalancing")
+                        st.write("This pie chart shows how risk contributions change with portfolio drift and selected rebalancing frequency.")
+                        
+                        # Rebalancing frequency toggle
+                        rebalance_option = st.radio(
+                            "Select Rebalancing Frequency",
+                            ("No Rebalancing", "Rebalance Every 6 Months", "Rebalance Every 1 Year", "Rebalance Every 2 Years"),
+                            key="risk_rebalance_toggle"
+                        )
+                        
+                        # Map radio options to months
+                        rebalance_period_map = {
+                            "No Rebalancing": None,
+                            "Rebalance Every 6 Months": 6,
+                            "Rebalance Every 1 Year": 12,
+                            "Rebalance Every 2 Years": 24
+                        }
+                        rebalance_period = rebalance_period_map[rebalance_option]
+                        
+                        # Simulate portfolio with selected rebalancing frequency
+                        sim_df, final_weights = simulate_rebalanced_portfolio(asset_data, asset_names, asset_weights, rebalance_period)
+                        
+                        if not sim_df.empty and not aligned_returns.empty:
+                            # Recalculate risk contributions with final weights
+                            try:
+                                drift_risk_decomp = compute_risk_contributions(aligned_returns, final_weights)
+                                drift_risk_df = drift_risk_decomp.reset_index().rename(columns={'index': 'Asset'})
+                                
+                                # Pie chart for drifted/rebalanced risk
+                                pie_chart_drift = alt.Chart(drift_risk_df).mark_arc().encode(
+                                    theta=alt.Theta('Percent of Risk:Q', stack=True),
+                                    color='Asset:N',
+                                    tooltip=['Asset', 'Percent of Risk']
+                                ).properties(
+                                    title=f"Risk Decomposition ({rebalance_option})",
+                                    width=300,
+                                    height=300
+                                )
+                                st.altair_chart(pie_chart_drift, use_container_width=True)
+                            except Exception as e:
+                                st.error(f"Error calculating drifted risk decomposition: {e}")
+                        else:
+                            st.warning("Simulation data is not available for risk decomposition.")
+                        
+                    st.subheader("Drawdowns of Assets & Portfolio Over Time")
+                    st.write("This graph visualizes the historical drawdowns of individual assets and the overall portfolio. A drawdown represents the percentage decline from the portfolio's previous peak, helping to measure downside risk. Click on the Labels to view Individual Breakdown")
+                    plot_drawdown_of_assets(asset_data, asset_names, portfolio_rets)
+                    growth_df = pd.DataFrame({'time': portfolio_rets.index, 'Growth': (1 + portfolio_rets).cumprod(), 'Label': 'Portfolio'})
+                    bench_df = pd.DataFrame({'time': benchmark_returns.index, 'Growth': (1 + benchmark_returns).cumprod(), 'Label': 'Benchmark'})
+                    combined_df = pd.concat([growth_df, bench_df], ignore_index=True)
+                    chart = alt.Chart(combined_df).mark_line().encode(
+                        x='time:T', 
+                        y='Growth:Q', 
+                        color=alt.Color('Label:N', scale=alt.Scale(
+                            domain=['Portfolio', 'Benchmark'],
+                            range=['blue', 'grey']
+                        )), 
+                        tooltip=['time:T', 'Label:N', 'Growth:Q']
+                    ).properties(title="Portfolio vs Benchmark Growth").interactive()
 
                 with st.expander("Monthly Performance Table", expanded=False):
                     st.subheader("Monthly Performance Table")
@@ -1784,30 +2007,7 @@ def main():
                     else:
                         st.warning("Portfolio or benchmark data is empty. Cannot display monthly performance table.")
 
-                with st.expander("Risk Analysis", expanded=False):
-                    if not risk_decomp_table.empty:
-                        risk_decomp_df = risk_decomp_table.reset_index().rename(columns={'index': 'Asset'})
-                        pie_chart = alt.Chart(risk_decomp_df).mark_arc().encode(
-                            theta='Percent of Risk:Q', color='Asset:N', tooltip=['Asset', 'Percent of Risk']
-                        ).properties(title="Risk Decomposition")
-                        st.subheader("Risk Decomposition Pie Chart")
-                        st.write("This pie chart illustrates the contribution of each asset to the overall portfolio risk. Rather than just showing allocation weights, it highlights which assets contribute the most to portfolio volatility.")
-                        st.altair_chart(pie_chart, use_container_width=True)
-                    st.subheader("Drawdowns of Assets & Portfolio Over Time")
-                    st.write("This graph visualizes the historical drawdowns of individual assets and the overall portfolio. A drawdown represents the percentage decline from the portfolio's previous peak, helping to measure downside risk. Click on the Labels to view Individual Breakdown")
-                    plot_drawdown_of_assets(asset_data, asset_names, portfolio_rets)
-                    growth_df = pd.DataFrame({'time': portfolio_rets.index, 'Growth': (1 + portfolio_rets).cumprod(), 'Label': 'Portfolio'})
-                    bench_df = pd.DataFrame({'time': benchmark_returns.index, 'Growth': (1 + benchmark_returns).cumprod(), 'Label': 'Benchmark'})
-                    combined_df = pd.concat([growth_df, bench_df], ignore_index=True)
-                    chart = alt.Chart(combined_df).mark_line().encode(
-                        x='time:T', 
-                        y='Growth:Q', 
-                        color=alt.Color('Label:N', scale=alt.Scale(
-                            domain=['Portfolio', 'Benchmark'],
-                            range=['blue', 'grey']
-                        )), 
-                        tooltip=['time:T', 'Label:N', 'Growth:Q']
-                    ).properties(title="Portfolio vs Benchmark Growth").interactive()
+                
                 
 
                 with st.expander("Advanced Risk/Return Metrics", expanded=False):
@@ -2082,6 +2282,29 @@ def main():
                             st.altair_chart(chart, use_container_width=True)
                         except Exception as e:
                             st.error(f"Calmar optimization error: {e}")         
+                
+                with st.expander("Hybrid Monte Carlo RL Optimization", expanded=False):
+                    st.subheader("Hybrid Monte Carlo with RL Optimization")
+                    st.write("Uses DCC-GARCH, t-Copula, and PPO for advanced portfolio optimization.")
+                    
+                    sim_horizon = st.number_input("Forecast Horizon (months)", min_value=1, max_value=60, value=12, step=1, key="sim_horizon_rl")
+                    n_sims = st.number_input("Number of Simulations", min_value=100, max_value=10000, value=1000, step=100, key="n_sims_rl")
+                    max_drawdown_threshold = st.number_input("Max Drawdown Threshold (%)", min_value=-100.0, max_value=0.0, value=-25.0, key="max_drawdown_rl") / 100
+                    min_alpha = st.number_input("Minimum Alpha (%)", min_value=0.0, max_value=100.0, value=5.0, key="min_alpha_rl") / 100
+                    
+                    if st.button("Run Optimization", key="run_optimization_rl"):
+                        if not aligned_returns.empty and not weighted_benchmark_returns.empty:
+                            try:
+                                sim_df, optimized_weights, weights_df, stats, evolution_df = hybrid_monte_carlo_rl_optimization(
+                                    aligned_returns, asset_names, asset_weights, weighted_benchmark_returns, 0.02, sim_horizon, n_sims, max_drawdown_threshold, min_alpha
+                                )
+                                st.write("Optimized Weights:", weights_df)
+                                st.write("Stats:", stats)
+                                # Add plotting as needed (e.g., from previous examples)
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                        else:
+                            st.warning("Missing data.")
 
             with tab2:  # Individual Asset Metrics
                 for asset in asset_names:
